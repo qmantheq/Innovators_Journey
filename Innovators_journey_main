@@ -1,0 +1,197 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon May 16 19:45:25 2022
+
+@author: quint
+"""
+
+
+#helpful links
+#https://realpython.com/pysimplegui-python/ juicy juice
+#https://pysimplegui.readthedocs.io/en/latest/#the-chain-link-fence the real juice
+#16:00 plain work
+#21:00 with learning
+
+#imports
+import pandas as pd
+import PySimpleGUI as sg
+import openpyxl as opy
+import mkl
+
+#User Defined Functions
+
+def to_excel(text, episode_name, row, column): #outputs results to excel
+    location = str(column) + str(row)
+    wb = opy.load_workbook('All_excerpts (Siena Copy)_test.xlsx') #opens a workbook in python thats the same as on the excel file
+    episode = wb.active
+    episode = wb[episode_name]
+    episode[location] = text #copies text onto location on workbook
+    wb.save(filename = "All_excerpts (Siena Copy)_test.xlsx") #saves workbook created in python to the excel file
+
+def passage_list(episode, passage_number, columns_select): #gets section from excel file and turns it into a usable dataframe
+    passage_number = int(passage_number)
+    episode_dataframe = pd.read_excel (r'All_excerpts (Siena Copy)_test.xlsx', sheet_name=episode) #makes data frame of specified sheet
+    passage_list = pd.DataFrame(episode_dataframe, columns= [columns_select])
+    passage = passage_list.iloc[passage_number - 1]
+    return(passage) #outputs specified text
+
+def problems(seed): #opens up window for problems addressedin passage
+    layout = [    [sg.Text("Problems Addressed In Passage")], #layout of UI
+                  [sg.Multiline(default_text = seed,enter_submits = True, size = (40,20))],
+                  [sg.Button(button_text='Save')]
+             ]
+    windows = sg.Window('New Window', layout)
+    while True: #events for UI
+        event, values = windows.read()
+        if event ==sg.WIN_CLOSED:
+            break
+        if event =="Save": 
+            outputs = values[0] #saves typed or edited problems addressed
+            break
+    windows.close()
+    return(outputs)
+
+def editor(episode, pass_num, edit, position): #edits the created data frame 
+    resources_df = passage_list(episode, pass_num, edit)
+    resource = sg.popup_get_text(edit, 'Please input item you want to add or delete') #popup for editing
+    resources = str(resources_df[0])
+    if type(resource) == str: #error checker
+        pos_res = -1
+        pos_res = resources.find(resource) #this and the if statment deal if it exsits in the list already
+        if pos_res == -1:
+            resources = resources + ", " + resource
+        if pos_res != -1:
+            resources = resources.replace((", " + resource),'')
+            resources = resources.replace(resource,'')
+        to_excel(resources, episode, (int(pass_num) + 1), position) #prints to the excel sheet
+    return(resources)
+
+def editor_multi(episode, pass_num, edit, position): #same as editor except taylored for the multiline problems addressed box
+    resources_df = passage_list(episode, pass_num, edit)
+    resources = problems(str(resources_df[0]))
+    to_excel(resources, episode, (int(pass_num) + 1), position)
+    return(resources)
+
+def episode_select():
+    temp_eps = pd.read_excel(r'All_excerpts (Siena Copy)_test.xlsx')
+    temp_eps = pd.DataFrame(temp_eps, columns = ["Innovation"])
+    choice_eps = [[],[]]
+    temp_eps = temp_eps.to_numpy()
+    for eps in temp_eps:
+        choice_eps[1].append(eps)
+    layout = [[sg.Text('Select an Episode')],
+              [sg.ButtonMenu("Episodes", choice_eps)]]
+    window = sg.Window('Episode selection', layout)
+    event, values = window.read()
+    window.close()
+    return(values[0])
+
+sg.theme("DarkGrey2")
+
+
+episode = episode_select()
+# episode = sg.popup_get_text('Episode', 'Please input episode name') #episode popup
+pass_num = 0
+passage_list_column = [ #UI for passage side
+    [ #first line
+        sg.Text("Passage number"),
+        sg.InputText(size=(25, 1), key="-passage_num-"),
+        sg.Button("Go", key="select_passage"),
+        sg.Button("Go back", key ='go_back')
+        #sg.FolderBrowse(),
+        
+        
+    ],
+    [ #passage
+        sg.Multiline(disabled = True, key = "-passage_selected-", size = (60, 40), write_only=True, auto_refresh=True)
+        
+    ],
+]
+
+passage_text_column = [ #UI for the tools
+    [ #opens up edit popup
+         sg.Button("Resources", key="resources", size = (15,1)),
+         sg.Button("Actors", key="actors", size = (15,1)),
+         sg.Button("Actor Types", key="actor types", size = (15,1))
+    ],
+    [ #display the current
+         sg.Text(size = (15,25), key = "resources_in_passage"),
+         sg.Text(size = (15,25), key = "actors_in_passage"),
+         sg.Text(size = (15,25), key = "actor_types_in_passage")
+    ],
+    [ #section for problems addressed
+         sg.Text("Problems Addressed") 
+    ],
+    [
+         sg.Text(size = (45,10), key = "problems_addressed_in_passage")
+    ],
+    [ 
+         sg.Button("Edit Problems Addressed", key = "problems_addressed_in_passage", size =(25,1)),#opens up window for editing problems addressed
+         sg.Button("Update window", key = "update", size = (15,1)) #general update button to update the document
+    ]         
+]
+
+
+layout = [ #makes the layout of the UI
+    [
+        sg.Column(passage_list_column),
+        sg.VSeperator(),
+        sg.Column(passage_text_column),
+    ]
+]
+window = sg.Window("Innovators Journey", layout)
+
+while True: #loop for events
+    event, values = window.read()
+    if event == "Exit" or event == sg.WIN_CLOSED: #for the Xing out
+        break
+        
+    print(event) #basic error checker, should not impact program
+    if event == "select_passage": 
+        pass_num = values["-passage_num-"] #populates passage
+        try: #for dealing with passage number inputs outside the range
+            passage = passage_list(episode, pass_num, "Excerpt")
+            window["-passage_selected-"].update(passage[0])
+        except:
+            passage = "Passage selection out of range.\n\nIf the problem persits or seems unlikely then try re-entering the name of the passage."
+            event = ""
+            window["-passage_selected-"].update(passage)
+    
+    if event != "": #basic updater for all the fields
+        if pass_num != 0:
+            pass_num = values["-passage_num-"]
+            passage = passage_list(episode, pass_num, "Excerpt")
+            window["-passage_selected-"].update(passage[0])
+            update_res = passage_list(episode, pass_num, "Resources")
+            window["resources_in_passage"].update(update_res[0])
+            update_act = passage_list(episode, pass_num, "Actors")
+            window["actors_in_passage"].update(update_act[0])
+            update_typ = passage_list(episode, pass_num, "Actor Types")
+            window["actor_types_in_passage"].update(update_typ[0])
+            update_passage = passage_list(episode, pass_num, "Problems Adressed")
+            window["problems_addressed_in_passage"].update(update_passage[0])
+    
+    if event == "resources": #edits resource list
+        resources = editor(episode, pass_num, "Resources", "C")
+        window["resources_in_passage"].update(resources)
+        
+    if event == "actors": #edits actor list
+        actors = editor(episode, pass_num, "Actors", "D")    
+        window["actors_in_passage"].update(actors)
+            
+    if event == "actor types": #edits actor types list
+        actor_types = editor(episode, pass_num, "Actor Types", "E")
+        window["actor_types_in_passage"].update(actor_types)
+    
+    if event == "problems_addressed_in_passage0": #edits problems addressed in passage list (the 0 on the end of the event is a weird thing idk, the code was being weird)
+        problems_add = editor_multi(episode, pass_num, "Problems Adressed", "F")
+        window["problems_addressed_in_passage"].update(problems_add)
+    
+    if event == "go_back": # for returning to episode selection list
+        episode_temp = episode #sets the current in a temperary variable incase of an invalid input
+        episode = episode_select()
+        if type(episode) != str: #deals with no input.
+            episode = episode_temp
+        window["-passage_selected-"].update("")
+
+window.close()
